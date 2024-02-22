@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bird Eats Bugs Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>  
+      <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        body { margin: 0; overflow: hidden; }
+        /* Adjust canvas and video styles */
+        #game-container { width: 100%; height: 100%; }
+    </style>
+    </head>
+<body>
+
+<div class="container-fluid h-100">
+    <div class="row full-height">
+        <!-- Hand tracking container -->
+        <div class="col-6 h-100">
+            <canvas id="canvas"></canvas>
+        </div>
+        <!-- Video feed container -->
+        <div class="col-6 h-100">
+            <video id="video" width="320px" height="440px" autoplay playsinline></video>
+        </div>
+    </div>
+    <div class="row full-height">
+        <!-- Game screen container -->
+        <div class="col-12 h-100" id="game-container"></div>
+    </div>
+</div>
+
+<script>
+class MainScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainScene' });
+        this.handX = 0; // Initialize handX to 0
+        this.handY = 0; // Initialize handY to 0
+    }
+
+    preload() {
+        this.load.image('bird', 'bird.png'); // Confirm this path is correct
+        this.load.image('bug', 'bug.png'); // Confirm this path is correct
+        this.load.image('background', 'bg.png'); // Confirm this path is correct
+    }
+
+
+    create() {
+
+    this.handX = this.sys.game.config.width / 2;
+    this.handY = this.sys.game.config.height / 2;
+
+    this.background = this.add.image(0, 0, 'background').setOrigin(0, 0);
+    if (this.background) {
+        this.background.displayWidth = this.sys.game.config.width;
+        this.background.displayHeight = this.sys.game.config.height;
+    } else {
+        console.log('Background image could not be created');
+    }
+
+    // Set bird's scale to a smaller size, e.g., 10% of its original size
+    this.bird = this.physics.add.sprite(this.handX, this.handY, 'bird').setScale(0.1);
+    this.bird.setCollideWorldBounds(true);
+
+    // Create and position bugs
+    this.bugs = this.physics.add.group({
+        key: 'bug',
+        repeat: 10
+    });
+
+    this.bugs.children.iterate(bug => {
+        let x = Phaser.Math.Between(0, this.sys.game.config.width);
+        let y = Phaser.Math.Between(0, this.sys.game.config.height);
+        bug.setPosition(x, y).setScale(0.1);
+    });
+
+    this.physics.add.collider(this.bird, this.bugs, this.eatBug, null, this);
+
+    this.time.addEvent({
+        delay: 3000,    // milliseconds
+        callback: this.createBug,
+        callbackScope: this,
+        loop: true
+    });
+
+    // Setup webcam after scene is created
+    this.setupWebcam();
+}
+
+
+    async setupWebcam() {
+        const video = document.getElementById('video');
+        // Get access to the webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.addEventListener('loadeddata', () => {
+                    this.loadHandModel();
+                });
+            });
+    }
+
+    async loadHandModel() {
+        alert('Loading hand pose model...');
+
+    try {
+        this.handpose = await handpose.load(); // Make sure this is awaited properly
+        console.log("Handpose model loaded successfully.");
+        alert("Handpose model loaded successfully.");
+
+        this.startHandDetection();
+    } catch (error) {
+        console.error("Failed to load the handpose model", error);
+        alert("Failed to load the handpose model. See console for details.");
+
+    }
+}
+
+createBug() {
+    // Calculate a random position within game bounds
+    let x = Phaser.Math.Between(0, this.sys.game.config.width);
+    let y = Phaser.Math.Between(0, this.sys.game.config.height);
+
+    // Create a new bug at the random position
+    let bug = this.bugs.create(x, y, 'bug').setScale(0.1);
+
+    // If you have additional setup for your bugs such as physics properties,
+    // you can apply those settings here.
+    }
+
+    startHandDetection() {
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.width;
+        canvas.height = video.height;
+
+
+        const detectHands = async () => {
+            const predictions = await this.handpose.estimateHands(video);
+            if (predictions.length > 0) {
+                // Using landmark 6 for the first knuckle of the index finger
+                const knuckle = predictions[0].landmarks[6]; // First knuckle of the index finger
+
+                // Map the knuckle position from video coordinates to game coordinates
+                this.handX = (knuckle[0] / video.width) * this.sys.game.config.width;
+                this.handY = (knuckle[1] / video.height) * this.sys.game.config.height;
+
+                // Optional: Draw landmarks for debugging
+                const ctx = document.getElementById('canvas').getContext('2d');
+                ctx.clearRect(0, 0, video.width, video.height);
+                predictions.forEach(prediction => {
+                    const landmarks = prediction.landmarks;
+                    for (let i = 0; i < landmarks.length; i++) {
+                        const x = landmarks[i][0];
+                        const y = landmarks[i][1];
+                        ctx.beginPath();
+                        ctx.arc(x, y, 5, 0, 3 * Math.PI);
+                        ctx.fillStyle = i === 6 ? "blue" : "red"; // Highlight the knuckle
+                        ctx.fill();
+                    }
+                });
+            }
+            
+            requestAnimationFrame(detectHands);
+        };
+
+        detectHands();
+    }
+
+    update() {
+    // Assuming the game's width is accessible via this.sys.game.config.width
+    // Calculate the mirrored X value across the game's width
+    const gameWidth = this.sys.game.config.width;
+    const mirroredX = gameWidth - this.handX;
+
+    // Apply scaling if necessary to fit your game design
+    // If you want to scale down the movement range, adjust this part
+    // Here, we directly use mirroredX without additional division, assuming the handX range matches the game's width
+    const scaledX = mirroredX; // Adjust this formula as needed to scale within your desired range
+
+    // Desired position based on hand detection, using scaled and mirrored X
+    const targetX = scaledX;
+    const targetY = this.handY;
+
+    // Smooth movement with linear interpolation (lerp)
+    const lerpFactor = 0.1;
+    this.bird.x += (targetX - this.bird.x) * lerpFactor;
+    this.bird.y += (targetY - this.bird.y) * lerpFactor;
+
+    // Bird rotation
+    const angle = Phaser.Math.Angle.Between(this.bird.x, this.bird.y, targetX, targetY);
+    this.bird.rotation = angle;
+}
+
+
+
+
+
+    eatBug(bird, bug) {
+        bug.disableBody(true, true);
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    scale: {
+        mode: Phaser.Scale.FIT,
+        parent: 'game-container',
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 640, // Fixed width
+        height: 480, // Fixed height
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    },
+    scene: MainScene
+};
+
+
+new Phaser.Game(config);
+</script>
+</body>
+</html>
