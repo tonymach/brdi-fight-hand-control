@@ -132,45 +132,47 @@ createBug() {
     }
 
     startHandDetection() {
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = video.width;
-        canvas.height = video.height;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.width;
+    canvas.height = video.height;
 
+    const detectHands = async () => {
+        const predictions = await this.handpose.estimateHands(video);
+        if (predictions.length > 0) {
+            // Get the landmarks for the index finger (landmarks 6 to 8)
+            const indexFingerLandmarks = predictions[0].landmarks.slice(6, 9);
 
-        const detectHands = async () => {
-            const predictions = await this.handpose.estimateHands(video);
-            if (predictions.length > 0) {
-                // Using landmark 6 for the first knuckle of the index finger
-                const knuckle = predictions[0].landmarks[6]; // First knuckle of the index finger
+            // Calculate the average position of the index finger landmarks
+            const avgX = indexFingerLandmarks.reduce((sum, landmark) => sum + landmark[0], 0) / indexFingerLandmarks.length;
+            const avgY = indexFingerLandmarks.reduce((sum, landmark) => sum + landmark[1], 0) / indexFingerLandmarks.length;
 
-                // Map the knuckle position from video coordinates to game coordinates
-                this.handX = (knuckle[0] / video.width) * this.sys.game.config.width;
-                this.handY = (knuckle[1] / video.height) * this.sys.game.config.height;
+            // Map the average position from video coordinates to game coordinates
+            this.handX = (avgX / video.width) * this.sys.game.config.width;
+            this.handY = (avgY / video.height) * this.sys.game.config.height;
 
-                // Optional: Draw landmarks for debugging
-                const ctx = document.getElementById('canvas').getContext('2d');
-                ctx.clearRect(0, 0, video.width, video.height);
-                predictions.forEach(prediction => {
-                    const landmarks = prediction.landmarks;
-                    for (let i = 0; i < landmarks.length; i++) {
-                        const x = landmarks[i][0];
-                        const y = landmarks[i][1];
-                        ctx.beginPath();
-                        ctx.arc(x, y, 5, 0, 3 * Math.PI);
-                        ctx.fillStyle = i === 6 ? "blue" : "red"; // Highlight the knuckle
-                        ctx.fill();
-                    }
-                });
-            }
-            
-            requestAnimationFrame(detectHands);
-        };
+            // Optional: Draw landmarks for debugging
+            const ctx = document.getElementById('canvas').getContext('2d');
+            ctx.clearRect(0, 0, video.width, video.height);
+            predictions.forEach(prediction => {
+                const landmarks = prediction.landmarks;
+                for (let i = 0; i < landmarks.length; i++) {
+                    const x = landmarks[i][0];
+                    const y = landmarks[i][1];
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 3 * Math.PI);
+                    ctx.fillStyle = (i >= 6 && i <= 8) ? "blue" : "red"; // Highlight the index finger
+                    ctx.fill();
+                }
+            });
+        }
 
-        detectHands();
-    }
+        requestAnimationFrame(detectHands);
+    };
 
+    detectHands();
+}
     update() {
     // Assuming the game's width is accessible via this.sys.game.config.width
     // Calculate the mirrored X value across the game's width
