@@ -104,19 +104,26 @@ class MainScene extends Phaser.Scene {
     }
 
     async loadHandModel() {
-        alert('Loading hand pose model...');
+  alert('Loading hand pose model...');
 
-    try {
-        this.handpose = await handpose.load(); // Make sure this is awaited properly
-        console.log("Handpose model loaded successfully.");
-        alert("Handpose model loaded successfully.");
+  try {
+    // Update the file paths to point to the local files
+    const anchorsPath = 'anchors.json';
+    const modelPath = 'model.json';
 
-        this.startHandDetection();
-    } catch (error) {
-        console.error("Failed to load the handpose model", error);
-        alert("Failed to load the handpose model. See console for details.");
+    // Load the handpose model and assign it to this.handpose
+    this.handpose = await handpose.load({
+      modelUrl: modelPath,
+      anchorsUrl: anchorsPath
+    });
+    console.log("Handpose model loaded successfully.");
+    alert("Handpose model loaded successfully.");
 
-    }
+    this.startHandDetection();
+  } catch (error) {
+    console.error("Failed to load the handpose model", error);
+    alert("Failed to load the handpose model. See console for details.");
+  }
 }
 
 createBug() {
